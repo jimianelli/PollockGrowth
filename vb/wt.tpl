@@ -26,18 +26,20 @@ INITIALIZATION_SECTION
 PARAMETER_SECTION
 	init_number log_winf(1);
 	init_number log_vonb(1);
-	init_number log_to(1);
-	init_bounded_number b(2,4,4);
+	init_number log_to(2);
+	init_bounded_number b(2,4,-4);
 
 
 	init_bounded_number log_sd_year(-30,10,3);
 	init_bounded_number log_sd_cohort(-30,10,3);
 
+	sdreport_matrix W_sd(nyr+1,nyr+3,sage,nage);
+
 
 	// init_bounded_vector year_effect(syr,nyr,-5.0,5.0,2);
 	// init_bounded_vector cohort_effect(byr,nyr,-5.0,5.0,2);
-	random_effects_vector year_effect(syr,nyr,2);
-	random_effects_vector cohort_effect(byr,nyr,2);
+	random_effects_vector year_effect(syr,nyr+3,2);
+	random_effects_vector cohort_effect(byr,nyr+3,2);
 
 	objective_function_value f;
 
@@ -52,8 +54,8 @@ PARAMETER_SECTION
 
 	vector wa(sage,nage);
 
-	matrix W(syr,nyr,sage,nage);	// Predicted Weight
-	matrix E(syr,nyr,sage,nage);	// Random effects
+	matrix W(syr,nyr+3,sage,nage);	// Predicted Weight
+	matrix E(syr,nyr+3,sage,nage);	// Random effects
 	matrix R(syr,nyr,sage,nage); 	// Residuals
 
 
@@ -70,18 +72,22 @@ PROCEDURE_SECTION
 
 	// Initial Cohort effects 
 	int iyr = byr;
-	for( int j = sage; j <= nage; j++){
-		E(syr,j) = exp(sd_cohort * cohort_effect(iyr++) + 
-		               sd_year * year_effect(syr));
+	for( int j = sage; j <= nage; j++)
+	{
+		E(syr,j) = exp(sd_cohort * cohort_effect(iyr++) + sd_year * year_effect(syr));
 	}
 	
 
-	for( int i = syr+1; i <= nyr; i++){
-		for( int j = sage; j <= nage; j++){
-			if( j == sage ){
+	for( int i = syr+1; i <= nyr+3; i++)
+	{
+		for( int j = sage; j <= nage; j++)
+		{
+			if( j == sage )
+			{
 				E(i,j) = exp(sd_cohort * cohort_effect(i));
-				//E(i,j)*= exp(sd_year * year_effect(i));
-			} else {
+			} 
+			else 
+			{
 				E(i,j) = E(i-1,j-1) * exp(sd_year * year_effect(i));
 			}
 		}
@@ -97,11 +103,16 @@ PROCEDURE_SECTION
 	W(syr) = elem_prod(wa,E(syr));
 	R(syr) = data(syr) - W(syr);
 	//cout<<W<<endl;
-	for( int i = syr+1; i <= nyr; i++){
-		for( int j = sage; j <= nage; j++){
-			if( j == sage ){
+	for( int i = syr+1; i <= nyr+3; i++)
+	{
+		for( int j = sage; j <= nage; j++)
+		{
+			if( j == sage )
+			{
 				W(i,j) = wa(j) * E(i,j);
-			} else if(j > sage){
+			} 
+			else if(j > sage)
+			{
 				double a1 = double(j)-1.0;
 				t1 = exp(-b*delta*k-a1*b*k);
 				t2 = pow(exp(delta*k+a1*k)-exp(k*to),b);
@@ -113,7 +124,8 @@ PROCEDURE_SECTION
 				W(i,j) = W(i-1,j-1) + dw * E(i,j);
 			}
 			// Residual
-			R(i,j) = data(i,j) - W(i,j);
+			if (i<= nyr) 
+		  	R(i,j) = data(i,j) - W(i,j);
 		}
 	}
 
@@ -148,6 +160,8 @@ PROCEDURE_SECTION
 
 	f = nloglike + nll_year_effect + nll_cohort_effect;
 
+	if (sd_phase()) for (int i=nyr+1;i<=nyr+3;i++) W_sd(i) = W(i);
+
 	//cout<<E<<endl;
 	//cout<<W<<endl;
 	//exit(1);
@@ -164,6 +178,13 @@ REPORT_SECTION
 	REPORT(R);
 	REPORT(E);
 
+
+FINAL_SECTION
+	for (int i=nyr+1;i<=nyr+3;i++) 
+	{
+		cout << (W_sd(i)) <<endl;
+		cout << (W_sd.sd(i))<<endl;
+	}
 
 
 GLOBALS_SECTION

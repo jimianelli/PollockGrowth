@@ -3,12 +3,15 @@ DATA_SECTION
   init_int endyr
   init_int age_st
   init_int age_end
+  !! cout<< styr <<" "<< endyr <<" "<< age_st <<" "<< age_end<<endl;
   int nages;
   !! nages = age_end - age_st +1;
   init_matrix wt_obs(styr,endyr,age_st,age_end)
   init_matrix sd_obs(styr,endyr,age_st,age_end)
+  vector ages(age_st,age_end)
 	int ret
  LOCAL_CALCS
+  for (int i=age_st;i<=age_end;i++) ages(i) = double(i);
   ret=0;
   if (ad_comm::argc > 1)
   {
@@ -26,19 +29,30 @@ DATA_SECTION
     }
 		endyr= endyr -ret;
   }
-  cout <<endyr<<endl;//exit(1);
+  // cout <<endyr<<endl;//exit(1);
  END_CALCS
 INITIALIZATION_SECTION
+  log_winf 0.75
+  log_K -2.
+  log_t0 .4
+  log_sd_coh -1.
+  log_sd_yr -.77
 
 PARAMETER_SECTION
   // Predicted weight matrix
-  matrix wt_pre(styr,endyr+3,age_st,age_end);
+  init_number log_winf(1);
+  init_number log_K(1);
+  init_number log_t0(1);
   init_bounded_number log_sd_coh(-5,10,3);
   init_bounded_number log_sd_yr(-5,10,4);
-  init_vector mnwt(age_st,age_end);
-  vector wt_inc(age_st+1,age_end);
+  matrix wt_pre(styr,endyr+3,age_st,age_end);
+  vector mnwt(age_st,age_end);
+  vector wt_inc(age_st,age_end-1);
   sdreport_number sig_coh;
   sdreport_number sig_yr;
+  sdreport_number winf;
+  sdreport_number K;
+  sdreport_number t0;
   sdreport_vector wt_last(age_st,age_end);
   sdreport_vector wt_cur(age_st,age_end);
   sdreport_vector wt_next(age_st,age_end);
@@ -47,37 +61,48 @@ PARAMETER_SECTION
 
   // init_bounded_vector coh_eff(styr-nages-age_st+1,endyr-age_st,-5,5,2);
   // init_bounded_vector yr_eff(styr,endyr,-5,5,3);
-  random_effects_vector coh_eff(styr-nages-age_st+1,endyr-age_st+3,3);
-  random_effects_vector yr_eff(styr,endyr+3,3);
+  random_effects_vector coh_eff(styr-nages-age_st,endyr-age_st+3,3);
+  random_effects_vector yr_eff(styr,endyr+3,4);
 
   objective_function_value nll;
 
 PROCEDURE_SECTION
   dvariable sigma_coh = (mfexp(log_sd_coh));
   dvariable sigma_yr  = (mfexp(log_sd_yr ));
-  wt_inc = mnwt(age_st+1,age_end) - ++mnwt(age_st,age_end-1);
+  winf = exp(log_winf);
+  K    = exp(log_K);
+  t0   = exp(log_t0);
+  mnwt = winf*(pow(1.-exp(-K*(ages-t0)),3));
+  wt_inc = --mnwt(age_st+1,age_end) - mnwt(age_st,age_end-1);
+  // cout <<mnwt <<endl;
+  // cout <<winf<<" "<<K<<" "<<t0<<endl;
   // cout <<wt_inc <<endl;exit(1);
   // Initialize first year
-  wt_pre(styr) = mnwt;
-  wt_pre(styr)(age_st+1,age_end) = ++wt_pre(styr)(age_st,age_end-1) + wt_inc*exp(sigma_yr*yr_eff(styr));
+  wt_pre(styr)    = mnwt;
+  // wt_pre(styr,age_st) *= exp(sigma_coh*coh_eff(styr));
   for (int j=age_st;j<=age_end;j++)
   {
     wt_pre(styr,j) *= exp(sigma_coh*coh_eff(styr-j));
+    // cout <<styr-j<<endl;
+    if (j>age_st) wt_pre(styr,j) = wt_pre(styr,j-1) + wt_inc(j-1)*exp(sigma_yr*yr_eff(styr));
     nll += square(wt_obs(styr,j)-wt_pre(styr,j))/(2.*square(sd_obs(styr,j)));
   }
 
   // subsequent years
   for (int i=styr+1;i<=endyr+3;i++)
   {
-    wt_pre(i)(age_st+1,age_end) = ++wt_pre(i-1)(age_st,age_end-1) + wt_inc*exp(sigma_yr*yr_eff(i));
+    // cout <<i-age_st<<endl;
+    wt_pre(i,age_st) = mnwt(age_st)*exp(sigma_coh*coh_eff(i-age_st));
+    wt_pre(i)(age_st+1,age_end) = ++(wt_pre(i-1)(age_st,age_end-1) + wt_inc*exp(sigma_yr*yr_eff(i)));
     // cout <<i<<" "<<wt_pre(i) <<endl;// exit(1);
     for (int j=age_st;j<=age_end;j++)
     {
-      wt_pre(i,j) *= exp(sigma_coh*coh_eff(i-j));
+      // wt_pre(i,j) *= exp(sigma_coh*coh_eff(i-j));
       if (i <= endyr)
         nll += square(wt_obs(i,j)-wt_pre(i,j))/(2.*square(sd_obs(i,j)));
     }
   }
+  // exit(1);
   // if (current_phase()>2)
   {
 		nll += 0.5*norm2(coh_eff);
