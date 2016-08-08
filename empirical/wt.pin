@@ -1,10 +1,11 @@
 # Number of parameters = 5 Objective function value = 3276.97  Maximum gradient component = 6.98016e-05
 # log_winf:
-0.712881373544
-# log_K:
--2.04064417445
-# log_t0:
--3.74140729381
+32
+57
+# log_alpha:
+-11.504064417445
+# log_k:
+-.175
 # log_sd_coh:
 -2.01325457471
 # log_sd_yr:

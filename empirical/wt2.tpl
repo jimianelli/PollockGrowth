@@ -8,6 +8,8 @@ DATA_SECTION
   init_matrix wt_obs(styr,endyr,age_st,age_end)
   init_matrix sd_obs(styr,endyr,age_st,age_end)
   vector ages(age_st,age_end)
+  init age_st_s
+  init age_end_s
   !! nages = age_end - age_st +1;
   !! for (int i=age_st;i<=age_end;i++) ages(i) = double(i);
   !! cout<< styr <<" "<< endyr <<" "<< age_st <<" "<< age_end<<endl;

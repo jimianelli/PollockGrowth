@@ -12,12 +12,13 @@ res <- list(list())
 for (i in 2014:2000){
 	mod = mod +1
   d$retyr <- i
+  print(i)
   write_dat(d,"wt.dat")
 	system("./wt -nox >t ")
 	system(paste0("cp wt.rep arc/wt_",i,".rep"))
 	res[[mod]] <- read_admb("wt")
 }
-names(res[[1]])
+length(res)
 # Compile retrospectives
 i=3
 df <- data.frame()
@@ -38,11 +39,12 @@ for (i in 1:15)
   names(r) <-c(3:15,names(r[14:16]))
   df <- rbind(df,gather(t,age,wt,1:13), gather(r,age,wt,1:13))
 }
-df$age <- as.numeric(df$age)
-str(df)
-odf <- df %>% filter(src=="obs",age>3,age<10) # ,run<14) 
-tdf <- df %>% filter(src=="projected",age>3,age<10) # ,run<14) 
-ggplot(odf, aes(x=yr,y=wt,colour=as.factor(run))) + geom_point() + facet_grid(age ~ .) + geom_line(data=tdf,aes(x=yr,y=wt,colour=as.factor(run))) 
+df$age <- as.numeric(df$age)+2
+odf <- df %>% filter(src=="obs",age>3,age<9) # ,run<14) 
+tdf <- df %>% filter(src=="projected",age>3,age<9) # ,run<14) 
+edf <- df %>% filter(run==1,src=="est",age>3,age<9) # ,run<14) 
+ggplot(odf, aes(x=yr,y=wt)) + geom_point() + facet_grid(age ~ .,scale="free_y") + ylab("Weight (kg)") + xlab("Year") + geom_line(data=edf,aes(x=yr,y=wt)) + geom_line(data=tdf,aes(x=yr,y=wt,colour=as.factor(run)))  + scale_color_discrete(guide=FALSE)
+
 ggplot(tdf, aes(x=yr,y=wt,colour=as.factor(run))) + geom_line() + geom_point(odf,aes(x=yr,y=wt,colour=as.factor(run))) + facet_grid(. ~ age )
 
 
