@@ -169,7 +169,7 @@ REPORT_SECTION
   }
     /* */ 
   report <<"cur_yr" << endl;
-  report << endyr << endl;
+  report << cur_yr << endl;
   report <<"data"   << endl;
   report <<wt_obs   << endl;
   dvector W1(age_st,age_end) ;
