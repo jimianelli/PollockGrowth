@@ -1,18 +1,31 @@
+//----------------------------
+// Goal to predict fishery weights at age
+// Data include survey and fishery data
+//----------------------------
+//----------------------------
+
 DATA_SECTION
-  init_int endyr_r ;// Retrospective years to test over (0 if current year)
-  init_int styr
-  init_int endyr
-  init_int age_st
-  init_int age_end
+  init_int cur_yr ;// Retrospective years to test over (0 if current year)
+  init_int styr;
+  init_int endyr;
+  init_int ndat;
+  int nscale_parm;
+  !! nscale_parm = ndat-1;
+  init_ivector fyr(1,ndat);
+  init_ivector lyr(1,ndat);
+  init_int age_st;
+  init_int age_end;
   int nages;
-  init_matrix wt_obs(styr,endyr,age_st,age_end)
-  init_matrix sd_obs(styr,endyr,age_st,age_end)
-  vector ages(age_st,age_end)
-  init age_st_s
-  init age_end_s
-  !! nages = age_end - age_st +1;
+  init_3darray wt_obs(1,ndat,fyr,lyr,age_st,age_end);
+  init_3darray sd_obs(1,ndat,fyr,lyr,age_st,age_end);
+  int phase_d_scale;
+  vector ages(age_st,age_end);
+  // Need to reset fyr and lyr to be cur_yr covered (for retrospective fitting)
+  !! // here
+  !! if (ndat>1) phase_d_scale = 1; else phase_d_scale = -1;
+  !! nages = age_end - age_st + 1;
   !! for (int i=age_st;i<=age_end;i++) ages(i) = double(i);
-  !! cout<< styr <<" "<< endyr <<" "<< age_st <<" "<< age_end<<endl;
+  !! cout<< ndat <<" "<<fyr<<" "<<styr <<" "<< endyr <<" "<< age_st <<" "<< age_end<<endl;
   
 INITIALIZATION_SECTION
   L1 30
@@ -28,72 +41,86 @@ PARAMETER_SECTION
   init_bounded_number L2(30,90,2);
   init_number log_alpha(-1);
   init_number log_K(2);
+  init_vector d_scale(1,nscale_parm,phase_d_scale);
   // init_number log_t0(3);
-  init_bounded_number log_sd_coh(-5,10,5);
-  init_bounded_number log_sd_yr(-5,10,4);
   // Predicted weight matrix
-  matrix wt_pre(styr,endyr_r+3,age_st,age_end);
+  matrix  wt_pre(styr,endyr,age_st,age_end);
+  3darray wt_hat(1,ndat,1991,2014,age_st,age_end);
   number alpha;
   vector mnwt(age_st,age_end);
   vector wt_inc(age_st,age_end-1);
-  sdreport_number sig_coh;
-  sdreport_number sig_yr;
   sdreport_number sigma_coh;
   sdreport_number sigma_yr;
   // sdreport_number winf;
   sdreport_number K;
   // sdreport_number t0;
-  sdreport_vector wt_last(age_st,age_end);
   sdreport_vector wt_cur(age_st,age_end);
   sdreport_vector wt_next(age_st,age_end);
   sdreport_vector wt_yraf(age_st,age_end);
 
 
-  random_effects_vector coh_eff(styr-nages-age_st+1,endyr_r-age_st+3,3);
-  random_effects_vector yr_eff(styr,endyr_r+3,4);
+  init_bounded_number log_sd_coh(-5,10,5);
+  init_bounded_number log_sd_yr(-5,10,4);
+  random_effects_vector coh_eff(styr,endyr,3);
+  random_effects_vector yr_eff(styr,endyr,4);
+  //init_vector coh_eff(styr,endyr,3);
+  //init_vector yr_eff(styr,endyr,4);
 
   objective_function_value nll;
 
 PROCEDURE_SECTION
-  sigma_coh    = exp(log_sd_coh);
-  sigma_yr     = exp(log_sd_yr );
+  sigma_coh    = mfexp(log_sd_coh);
+  sigma_yr     = mfexp(log_sd_yr );
   // winf         = exp(log_winf);
-  K            = exp(log_K);
-  alpha        = exp(log_alpha);
+  K            = mfexp(log_K);
+  alpha        = mfexp(log_alpha);
   // t0           = (log_t0);
-  // mnwt         = winf*(pow(1.-exp(-K*(ages-t0)),3));
+  // mnwt         = winf*(pow(1.-mfexp(-K*(ages-t0)),3));
   for (int j=age_st;j<=age_end;j++)
   {
     mnwt(j)    = alpha * pow(L1 + (L2-L1)*(1.-pow(K,double(j-age_st))) / (1.-pow(K,double(nages-1))) ,3);
-    // cout << j << " " << mnwt(j)<<endl;
   }
   wt_inc       = --mnwt(age_st+1,age_end) - mnwt(age_st,age_end-1);
 
   // Initialize first year
   wt_pre(styr)    = mnwt;
-  for (int j=age_st;j<=age_end;j++)
+  /* for (int j=age_st;j<=age_end;j++)
   {
     if (j>age_st) 
       wt_pre(styr,j) = wt_pre(styr,j-1) + wt_inc(j-1)*exp(sigma_yr*yr_eff(styr));
     int icoh        = styr-j;
     wt_pre(styr,j) *= mfexp(sigma_coh*coh_eff(icoh));
-    // Fit global mean to all years...
-    nll += square(wt_obs(styr,j)-mnwt(j))/(2.*square(sd_obs(styr,j)));
-    // Fit annual predictions to all years...
-    nll += square(wt_obs(styr,j)-wt_pre(styr,j))/(2.*square(sd_obs(styr,j)));
   }
+  */
 
   // subsequent years
-  for (int i=styr+1;i<=endyr_r+3;i++)
+  for (int i=styr+1;i<=endyr;i++)
   {
-    wt_pre(i,age_st) = mnwt(age_st)*exp(sigma_coh*coh_eff(i-age_st));
-    wt_pre(i)(age_st+1,age_end) = ++(wt_pre(i-1)(age_st,age_end-1) + wt_inc*exp(sigma_yr*yr_eff(i)));
+    wt_pre(i,age_st) = mnwt(age_st)*mfexp(sigma_coh*coh_eff(i));
+    wt_pre(i)(age_st+1,age_end) = ++(wt_pre(i-1)(age_st,age_end-1) + wt_inc*mfexp(sigma_yr*yr_eff(i)));
+  }
+    // Fit global mean to all years...
+  for (int h = 1;h<=ndat;h++)
+  {
+  	if (h>1) 
+  	  for (int i=fyr(h);i<=lyr(h);i++)
+  		  wt_hat(h,i) = d_scale(h-1) * wt_pre(i);
+  	else
+  	  for (int i=fyr(h);i<=lyr(h);i++)
+  		  wt_hat(h,i) = wt_pre(i);
+
     for (int j=age_st;j<=age_end;j++)
     {
-      if (i <= endyr_r)
+      nll += square(wt_obs(h,fyr(h),j)-mnwt(j))/(2.*square(sd_obs(h,fyr(h),j)));
+    // Fit annual predictions to all years...
+      nll += square(wt_obs(h,fyr(h),j)-wt_hat(h,fyr(h),j))/(2.*square(sd_obs(h,fyr(h),j)));
+    }
+    for (int i=fyr(h);i<=lyr(h);i++)
+    {
+      for (int j=age_st;j<=age_end;j++)
       {
-        nll += square(wt_obs(i,j)-mnwt(j))/(2.*square(sd_obs(i,j)));
-        nll += square(wt_obs(i,j) - wt_pre(i,j))/(2.*square(sd_obs(i,j)));
+        nll += square(wt_obs(h,i,j) - mnwt(j))      /(2.*square(sd_obs(h,i,j)));
+        nll += square(wt_obs(h,i,j) - wt_hat(h,i,j))/(2.*square(sd_obs(h,i,j)));
       }
     }
   }
@@ -102,20 +129,17 @@ PROCEDURE_SECTION
 
   if (sd_phase())
   {
-    sig_coh = exp(log_sd_coh);
-    sig_yr  = exp(log_sd_yr );
-    wt_last = wt_pre(endyr_r)  ; // *exp(sigma_coh*sigma_coh/2.  + sigma_yr*sigma_yr/2.);
-    wt_cur  = wt_pre(endyr_r+1); // *exp(sigma_coh*sigma_coh/2.  + sigma_yr*sigma_yr/2.);
-    wt_next = wt_pre(endyr_r+2); // *exp(sigma_coh*sigma_coh/2.  + sigma_yr*sigma_yr/2.);
-    wt_yraf = wt_pre(endyr_r+3); // *exp(sigma_coh*sigma_coh/2.  + sigma_yr*sigma_yr/2.);
+    wt_cur  = wt_pre(cur_yr); // *mfexp(sigma_coh*sigma_coh/2.  + sigma_yr*sigma_yr/2.);
+    wt_next = wt_pre(endyr-1); // *exp(sigma_coh*sigma_coh/2.  + sigma_yr*sigma_yr/2.);
+    wt_yraf = wt_pre(endyr); // *exp(sigma_coh*sigma_coh/2.  + sigma_yr*sigma_yr/2.);
   }
-  for (int i=1;i<=3;i++) wt_pre(endyr_r+i) *=  exp(sigma_coh*sigma_coh/2.  + sigma_yr*sigma_yr/2.);
+  for (int i=3;i>=0;i--) wt_pre(endyr-i) *=  exp(sigma_coh*sigma_coh/2.  + sigma_yr*sigma_yr/2.);
 
 REPORT_SECTION
   if (last_phase())
   {
   int retyr ;
-  retyr = int (endyr - endyr_r);
+  retyr = int (endyr - endyr);
   switch ( retyr ) 
   {
     case 0 : 
@@ -125,50 +149,50 @@ REPORT_SECTION
     break;
 
     case 1 : 
-      report << "lof1"<<endl; report << pow(norm2(wt_obs(endyr_r+1)-wt_cur),.5) <<endl;
+      report << "lof1"<<endl; report << pow(norm2(wt_obs(1,endyr-3)-wt_cur),.5) <<endl;
       report << "lof2"<<endl; report << 0 <<endl;
       report << "lof3"<<endl; report << 0 <<endl;
     break;
 
     case 2 : 
-      report << "lof1"<<endl; report << pow(norm2(wt_obs(endyr_r+1)-wt_cur),.5) <<endl;
-      report << "lof2"<<endl; report << pow(norm2(wt_obs(endyr_r+2)-wt_next),.5) <<endl;
+      report << "lof1"<<endl; report << pow(norm2(wt_obs(1,endyr-3)-wt_cur),.5) <<endl;
+      report << "lof2"<<endl; report << pow(norm2(wt_obs(1,endyr-2)-wt_next),.5) <<endl;
       report << "lof3"<<endl; report << 0 <<endl;
     break;
 
     default : 
-      report << "lof1"<<endl; report << pow(norm2(wt_obs(endyr_r+1)-wt_cur),.5) <<endl;
-      report << "lof2"<<endl; report << pow(norm2(wt_obs(endyr_r+2)-wt_next),.5) <<endl;
-      report << "lof3"<<endl; report << pow(norm2(wt_obs(endyr_r+3)-wt_yraf),.5) <<endl;
+      report << "lof1"<<endl; report << pow(norm2(wt_obs(1,endyr-3)-wt_cur),.5) <<endl;
+      report << "lof2"<<endl; report << pow(norm2(wt_obs(1,endyr-2)-wt_next),.5) <<endl;
+      report << "lof3"<<endl; report << pow(norm2(wt_obs(1,endyr-1)-wt_yraf),.5) <<endl;
     break;
   }
   }
     /* */ 
   report <<"cur_yr" << endl;
-  report << endyr_r << endl;
+  report << endyr << endl;
   report <<"data"   << endl;
   report <<wt_obs   << endl;
-  report <<"W1"     << endl;
   dvector W1(age_st,age_end) ;
-  W1 = wt_obs(endyr_r);
+  W1 = wt_obs(1,lyr(1));
   REPORT(W1);
   report <<"W3"     << endl;
   dvector W3(age_st,age_end) ;
   W3.initialize();
   for (int i=1;i<=3;i++)
-    W3 += wt_obs(endyr_r-i+1);
+    W3 += wt_obs(1,lyr(1)-i+1);
   report << W3/3. <<endl;
   W3.initialize();
   for (int i=1;i<=10;i++)
-    W3 += wt_obs(endyr_r-i+1);
+    W3 += wt_obs(1,lyr(1)-i+1);
   report << "W10"<<endl<<W3/10. <<endl;
   report <<"W"<<endl;
   report << wt_pre<<endl;
   if (last_phase())
   {
-    dmatrix resid(styr,endyr_r,age_st,age_end);
-    for (int i=styr;i<=endyr_r;i++)
-      resid(i) = value(wt_obs(i)-wt_pre(i));
+  	int h = 1;
+    dmatrix resid(fyr(h),lyr(h),age_st,age_end);
+    for (int i=fyr(h);i<=lyr(h);i++)
+      resid(i) = value(wt_obs(1,i)-wt_hat(1,i));
     report <<"residuals"<<endl;
     report << resid << endl;
   }
@@ -176,16 +200,16 @@ REPORT_SECTION
   REPORT(yr_eff);
   REPORT(sigma_coh);
   report <<"cohort"<<endl;
-  for (int j=age_st;j>=age_end;j--)
-    report << styr-j <<" ";
-  for (int i=styr+1;i<=endyr_r+3;i++)
+  // for (int j=age_st;j>=age_end;j--)
+    // report << styr-j <<" ";
+  for (int i=styr+1;i<=endyr;i++)
     report << i-age_st <<" ";
   report<<endl;
   report <<"coh_eff"<<endl;
-  for (int j=age_end;j>=age_st;j--)
-    report << sigma_coh*coh_eff(styr-j) <<" ";
-  for (int i=styr+1;i<=endyr_r+3;i++)
-    report << sigma_coh*coh_eff(i-age_st) <<" ";
+  // for (int j=age_end;j>=age_st;j--)
+    // report << sigma_coh*coh_eff(styr-j) <<" ";
+  for (int i=styr;i<=endyr;i++)
+    report << sigma_coh*coh_eff(i) <<" ";
   report<<endl;
   REPORT(ages);
   REPORT(mnwt);

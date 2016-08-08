@@ -37,7 +37,7 @@ write_dat <- function(A,datfile)
     cat("# Datafile created in R \n",file=datfile)
     for (i in 1:length(A))
     {
-      cat("#",A$names[[i]],"\n",file=datfile,append=TRUE )
+      cat("#",names(A[i]),"\n",sep="",file=datfile,append=TRUE )
       if (is.null(dim(A[[i]])))
         cat(A[[i]],"\n", file=datfile,append=TRUE )
       else
