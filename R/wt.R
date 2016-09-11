@@ -8,70 +8,78 @@ mytheme <- theme(panel.grid.major.x = element_blank(), panel.grid.minor.x = elem
 mytheme <- mytheme + theme(text=element_text(size=18)) + theme(axis.title.x=element_text(size=22) ,axis.title.y=element_text(size=22))
 mytheme <- mytheme + theme(panel.grid.major.x = element_blank(), panel.grid.minor.x = element_blank() )
 mytheme <- mytheme + theme( panel.background = element_rect(fill="white"), panel.border = element_rect(colour="black", fill=NA, size=1))
-d <- read_dat("../empirical/wt.dat")
-d
-write_dat(d,"../empirical/wt2shit.dat")
 setwd("~/_mymods/PollockGrowth/empirical")
 getwd()
 
-system("cp wt2_with_srv.pin wt2.pin")
-d <- read_dat("wt2_with_srv.dat")
 i=2015
 mod = 0
 # RE (random effects) results
 reres <- list(list())
-for (i in 2014:2000){
-	mod = mod +1
-  d$cur_yr <- i
-  print(i)
-  write_dat(d,"wt2.dat")
-	system("./wt2 -nox >t ")
-	system(paste0("cp wt2.rep arc/wt2_",i,".rep"))
-  system(paste0("cp wt2.par arc/wt2_",i,".par"))
-  system(paste0("cp wt2.std arc/wt2_",i,".std"))
-	reres[[mod]] <- read_admb("wt2")
+# First 15 w/o survey
+# Second 15 w/ survey
+#system(paste0("cp arc/wt2_no_srv.dat wt_",mod_opt,".dat") )
+#system(paste0("cp arc/wt2_no_srv.pin wt_",mod_opt,".pin") )
+# system(paste0("cp arc/wt2_with_srv.pin wt_",mod_opt,".pin") )
+do_est = FALSE
+for (ij in 1:3)
+{
+  mod_opt <- ifelse(ij==1,"nosrv",ifelse(ij==2,"both",ifelse(ij==3,"yreff","coheff")))
+  if (ij>1)
+  {
+    system(paste0("cp arc/wt2_with_srv.dat wt_",mod_opt,".dat") )
+    system(paste0("cp wt_both.pin wt_",mod_opt,".pin") )
+  }
+  else
+  {
+    mod_opt="both"
+    system(paste0("cp arc/wt2_no_srv.dat wt_",mod_opt,".dat") )
+    system(paste0("cp arc/wt2_no_srv.pin wt_",mod_opt,".pin") )
+  }
+  d <- read_dat(paste0("wt_",mod_opt,".dat"))
+  print(mod); print(mod_opt)
+  for (i in 2014:2000){
+  	mod = mod +1
+    d$cur_yr <- i
+    print(i)
+    write_dat(d,paste0("wt_",mod_opt,".dat"))
+    fname <- paste0("arc/wt_",mod_opt,"_",ij,"_",i)
+    if (do_est)
+    {
+  	  system(paste0("./wt_",mod_opt," -nox >t "))
+  	  system(paste0("cp wt_",mod_opt,".rep ", fname,".rep"))
+      system(paste0("cp wt_",mod_opt,".std ", fname,".std"))
+      system(paste0("cp wt_",mod_opt,".par ", fname,".par"))
+    }
+  	reres[[mod]] <- read_admb(fname)
+  }
 }
+# 1st 15 is w/o survey, second w/ and both, 3rd is w/ and yreff, 4th is w/ and coheff
 getwd()
+length(reres)
 
-system("cp wt2_no_srv.pin wt2.pin")
-d <- read_dat("wt2_no_srv.dat")
-i=2015
-for (i in 2014:2000){
-  mod = mod +1
-  d$cur_yr <- i
-  print(i)
-  write_dat(d,"wt2.dat")
-  system("./wt2 -nox >t ")
-  system(paste0("cp wt2.rep arc/wt2_no_srv_",i,".rep"))
-  system(paste0("cp wt2.par arc/wt2_no_srv_",i,".par"))
-  system(paste0("cp wt2.std arc/wt2_no_srv_",i,".std"))
-  reres[[mod]] <- read_admb("wt2")
-}
-mod
-
-#----------------------
-# get scores
-i=2
-#----------------------
+#--------------------------
+# Prediction evaluations from means
+#--------------------------
 # Read in weights by age 3-15
-stwt <- data.table(read.table("~/OneDrive/ebswp/data/sampler/cases/ebswp/statwts.dat",as.is=TRUE))
+stwt <- as.data.frame(read.table("~/OneDrive/ebswp/data/sampler/cases/ebswp/statwts.dat",as.is=TRUE))
+stwt[11:13] <- 0
+stwt
 mnwt <- data.table(read.table("~/OneDrive/ebswp/data/sampler/cases/ebswp/wtage2016.dat",as.is=TRUE))
 names(mnwt) <- 3:15;
 mnwt$yr <- 1991:2015; 
-stwt
 mnwt
 mnwt.m <- melt(data.table(mnwt), measure.vars = 1:13, variable.name = "age", value.name = "wt")
 mnwt.m$age <- as.numeric(mnwt.m$age) +2
+setkey(mnwt.m,yr,age) # NOTE the order of this matters...
 mnwt.m$mygam <- as.numeric(stwt)
-setkey(mnwt.m,yr,age)
 mnwt.m
-i=3
-repred
+reres[[45]]
 length(reres)
 repred <- data.table(subn=integer(),yr=double(),age=double(),pred=double(),obs=double(),pyr=integer(), ayr=double(),stat=double())[]
 for (i in 1:length(reres))
 {
-  if(i!=15|i!=30)
+  mysub <- ifelse(i<=15,"No survey",ifelse(i<=30,"With survey","Year effects only"))
+  if(i!=15|i!=30|i!=45)
   {
     iyr <- reres[[i]]$cur_yr
     pred <- data.table(age=rep(3:15,2),yr=rep(c(iyr,iyr+1),each=13))
@@ -87,11 +95,10 @@ for (i in 1:length(reres))
     setkey(pred,yr,age)
     t     <- merge(pred,mnwt.m )[,.(pred=pred,obs=wt,stat=sum(mygam*(wt-pred)^2) ),.(yr,age)]
     t$ayr <- iyr; t$pyr <- t$yr - iyr; 
-    if (i<15) 
-      t$subn <- "With survey" # i #paste0("Model_",1*integer(i/15),i)
+    if (i<=15) 
+      t$subn <- mysub #"No survey" # i #paste0("Model_",1*integer(i/15),i)
     else
-      t$subn <- "No survey"   # i #paste0("Model_",1*integer(i/15),i)
-
+      t$subn <- mysub #"With survey"   # i #paste0("Model_",1*integer(i/15),i)
     repred   <- rbind(repred,t)
   }
 }
@@ -99,45 +106,6 @@ repred$pyr <- as.factor(repred$pyr)
 #repred$subn <- as.factor(rep(c("with","without"),each=15))
 setkey(repred,age,pyr)
 repred
-repred[subn=="With survey"&age<8&age>3] %>%  ggplot(aes(x=yr,y=pred,colour=as.factor(age))) + labs(y="Body weight (kg)",x="Year") + 
-repred[subn=="With survey"&age<18&age>10] %>%  ggplot(aes(x=yr,y=pred,colour=as.factor(age))) + labs(y="Body weight (kg)",x="Year") + 
-                  mytheme + theme(panel.grid.major.x = element_line(colour="grey",linetype="dashed")) +
-                  scale_x_continuous(breaks=2001:2015) + annotate("text", x=2001, y=0.49,colour="red",         label="Age 4",size=9) + annotate("text", x=2003, y=0.68,colour="limegreen", label="Age 5",size=9) + annotate("text", x=2002, y=0.82,colour="darkcyan",   label="Age 6",size=9) + annotate("text", x=2001, y=0.95,colour="purple",      label="Age 7",size=9) +
-                  geom_point(aes(x=yr-.2*(as.numeric(pyr)-1.5),shape=pyr,size=1.2)) + geom_point(aes(x=yr,y=obs),shape=8,size=4) + guides(fill=FALSE,shape=FALSE,size=FALSE,colour=FALSE) +
-                  geom_line(data=mnpred[subn=="1"&age<18&age>10],aes(x=yr,y=pred,colour=as.factor(age),size=1.1)) 
-                  geom_line(data=mnpred[subn=="1"&age<8&age>3],aes(x=yr,y=pred,colour=as.factor(age),size=1.1)) 
-
-
-t <- rbind(mnpred[subn=="1"],repred[subn=="No survey"])
-ggplot(t,aes(x=yr,y=stat,col=pyr,as.factor(age))) + geom_point() + mytheme #stat_identity())
-ggplot(t[pyr=="0"],aes(x=yr,y=stat,col=subn)) + geom_point() +facet_grid(age~.) + mytheme #stat_identity())
-
-tt <- rbind(mnpred[,.(score=sum(stat)),.(subn,pyr)],repred[,.(score=sum(stat)),.(subn,pyr)] )
-setkey(tt,pyr,subn)
-tt
-repred[,.(score=sum(stat)),.(subn,pyr)] %>% 
-ggplot(tt,aes(x=subn,y=score,fill=pyr)) + geom_bar(stat="identity",position="dodge") + mytheme #stat_identity())
-
-tt
-repred
-
-#--------------------------
-# Prediction evaluations from means
-#--------------------------
-# Read in weights by age 3-15
-stwt <- data.table(read.table("statwts.dat",as.is=TRUE))
-mnwt <- data.table(read.table("~/OneDrive/ebswp/data/sampler/cases/ebswp/wtage2016.dat",as.is=TRUE))
-names(mnwt) <- 3:15;mnwt$yr <- 1991:2015; 
-stwt
-mnwt
-mnwt.m <- melt(data.table(mnwt), measure.vars = 1:13, variable.name = "age", value.name = "wt")
-mnwt.m$age <- as.numeric(mnwt.m$age) +2
-mnwt.m$mygam <- as.numeric(stwt)
-setkey(mnwt.m,yr,age)
-mnwt.m
-str(mnwt.m)
-i=2001
-subn=1
 mnpred <- data.table(subn=integer(),yr=double(),age=double(),pyr=integer(), ayr=double(),stat=double(),pred=double(),obs=double())[]
 for (subn in c(1,3,5,10))
 {
@@ -159,9 +127,59 @@ mnpred$pyr <- as.factor(mnpred$pyr)
 mnpred$subn <- as.factor(mnpred$subn)
 mnpred
 mnpred[,.(score=sum(stat)),.(subn,pyr)] %>% ggplot(aes(x=subn,y=score,fill=pyr)) + geom_bar(stat="identity",position="dodge") + mytheme #stat_identity())
-ggplot(aes(x=subn,y=score,fill=pyr)) + geom_bar(stat="identity",position="dodge") + mytheme #stat_identity())
 setkey(mnpred,yr)
 mnpred
+
+#repred[subn=="With survey"&age<18&age>10] %>%  ggplot(aes(x=yr,y=pred,colour=as.factor(age))) + labs(y="Body weight (kg)",x="Year") + 
+p <- repred[subn=="With survey"&age<8&age>3] %>%  ggplot(aes(x=yr,y=pred,colour=as.factor(age))) + labs(y="Body weight (kg)",x="Year") + 
+                  mytheme + theme(panel.grid.major.x = element_line(colour="grey",linetype="dashed")) +
+                  scale_x_continuous(breaks=2001:2015) + annotate("text", x=2001, y=0.49,colour="red",         label="Age 4",size=9) + annotate("text", x=2003, y=0.68,colour="limegreen", label="Age 5",size=9) + annotate("text", x=2002, y=0.82,colour="darkcyan",   label="Age 6",size=9) + annotate("text", x=2001, y=0.95,colour="purple",      label="Age 7",size=9) +
+                  geom_point(aes(x=yr-.2*(as.numeric(pyr)-1.5),shape=pyr,size=1.2)) + 
+                  geom_point(aes(x=yr,y=obs),shape=8,size=4) + guides(fill=FALSE,shape=FALSE,size=FALSE,colour=FALSE) #+
+                  geom_line(data=mnpred[subn=="1"&age<8&age>3],aes(x=yr,y=pred,colour=as.factor(age)),size=1) 
+print(p)
+t <- repred[subn=="With survey"&age<8&age>3]
+p <- ggplot(t, aes(x=yr,y=pred,colour=as.factor(age))) + labs(y="Body weight (kg)",x="Year") + 
+                  mytheme + theme(panel.grid.major.x = element_line(colour="grey",linetype="dashed")) +
+                  scale_x_continuous(breaks=2001:2015) + annotate("text", x=2001, y=0.49,colour="red", label="Age 4",size=9) + annotate("text", x=2003, y=0.68,colour="limegreen", label="Age 5",size=9) + annotate("text", x=2002, y=0.82,colour="darkcyan",   label="Age 6",size=9) + annotate("text", x=2001, y=0.95,colour="purple",      label="Age 7",size=9) +
+                  geom_point(aes(x=yr-.2*(as.numeric(pyr)-1.5),shape=pyr,size=1.2)) + 
+                  geom_point(aes(x=yr,y=obs),shape=8,size=4) + guides(fill=FALSE,shape=FALSE,size=FALSE,colour=FALSE) +
+                  geom_line(data=mnpred[subn=="1"&age<8&age>3], aes(x=yr,y=pred,colour=as.factor(age)),size=1) + 
+                  geom_point(data=mnpred[subn=="1"&age<8&age>3], aes(x=yr-.2*(as.numeric(pyr)-1.5),shape=pyr,size=1.2))  
+                  #geom_line(data=mnpred[subn=="1"&age<18&age>10],aes(x=yr,y=pred,colour=as.factor(age),size=1.1)) 
+
+print(p)
+
+t <- rbind(mnpred[subn=="1"],repred[subn=="No survey"])
+ggplot(t,aes(x=yr,y=stat,col=pyr,as.factor(age))) + geom_point() + mytheme #stat_identity())
+ggplot(t[pyr=="0"],aes(x=yr,y=stat,col=subn)) + geom_point() +facet_grid(age~.) +  mytheme #stat_identity())
+
+#--------------------------
+# Prediction evaluations all models...
+#--------------------------
+tt <- rbind(mnpred[,.(score=sum(stat)),.(subn,pyr)],repred[,.(score=sum(stat)),.(subn,pyr)] )
+setkey(tt,pyr,subn)
+tt
+ggplot(tt,aes(x=subn,y=score,fill=pyr)) +labs(x="Model",y="Weighted score",fill="Projection \n year") + geom_bar(stat="identity",position="dodge") + mytheme #stat_identity())
+#--------------------------
+stwt
+
+tt
+repred
+
+stwt <- data.table(read.table("statwts.dat",as.is=TRUE))
+mnwt <- data.table(read.table("~/OneDrive/ebswp/data/sampler/cases/ebswp/wtage2016.dat",as.is=TRUE))
+names(mnwt) <- 3:15;mnwt$yr <- 1991:2015; 
+stwt
+mnwt
+mnwt.m <- melt(data.table(mnwt), measure.vars = 1:13, variable.name = "age", value.name = "wt")
+mnwt.m$age <- as.numeric(mnwt.m$age) +2
+mnwt.m$mygam <- as.numeric(stwt)
+setkey(mnwt.m,yr,age)
+mnwt.m
+str(mnwt.m)
+i=2001
+subn=1
 mnpred[subn=="1"&age<8&age>3] %>%  ggplot(aes(x=yr,y=pred,colour=as.factor(age))) + geom_line(aes(size=1.0)) + geom_point(aes(shape=pyr,size=1.2)) + geom_point(aes(x=yr,y=obs),shape=3,size=4) +mytheme
 
 mnpred[subn=="1"&age<8&age>3] %>%  ggplot(aes(x=yr,y=pred,colour=as.factor(age))) + geom_line() + labs(y="Body weight (kg)",x="Year") + 
@@ -173,7 +191,8 @@ mnpred[subn=="1"&age<8&age>3] %>%  ggplot(aes(x=yr,y=pred,colour=as.factor(age))
 mnpred[subn=="1"&age<8&age>3] %>%  ggplot(aes(x=yr,y=pred,shape=pyr,colour=as.factor(age))) + geom_point(aes(size=4)) + geom_point(aes(x=yr,y=obs),shape=3,size=4) +mytheme
 mnpred 
 str(repred)
-repred[subn<=15,subn:="with survey"]
+repred
+repred[subn<=15,subn:="No survey"]
 /new
 
 #-----------------------------------------------------------
