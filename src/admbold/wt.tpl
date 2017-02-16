@@ -47,8 +47,8 @@ DATA_SECTION
  END_CALCS
   
 INITIALIZATION_SECTION
-  L1 40
-  L2 95
+  L1 30
+  L2 55
   log_K -.3
   log_alpha -11.
   // log_t0 -3.4
@@ -57,7 +57,7 @@ INITIALIZATION_SECTION
 
 PARAMETER_SECTION
   init_bounded_number L1(10,50,1);
-  init_bounded_number L2(30,110,2);
+  init_bounded_number L2(30,90,2);
   init_number log_alpha(-1);
   init_number log_K(3);
   init_matrix d_scale(1,nscale_parm,age_st,age_end,phase_d_scale);
@@ -125,7 +125,6 @@ PROCEDURE_SECTION
 
       for (int j=age_st;j<=age_end;j++)
       {
-				// cout<<nll<<endl;
         nll += square(wt_obs(h,i,j) - mnwt(j))      /(2.*square(sd_obs(h,i,j)));
         nll += square(wt_obs(h,i,j) - wt_hat(h,i,j))/(2.*square(sd_obs(h,i,j)));
       }
@@ -230,4 +229,4 @@ GLOBALS_SECTION
 
 TOP_OF_MAIN_SECTION
   arrmblsize = 1000000;
-  gradient_structure::set_MAX_NVAR_OFFSET(100000);
+  gradient_structure::set_MAX_NVAR_OFFSET(10000);
