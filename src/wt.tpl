@@ -223,6 +223,9 @@ REPORT_SECTION
 GLOBALS_SECTION
   #undef REPORT
   #define REPORT(object) report << #object "\n" << setw(8)  << setprecision(6) << setfixed() << object << endl;
+  #undef ReadLog
+  #define ReadLog(object) Log << #object "\n" << setw(8)  << setprecision(6) << setfixed() << object << endl;
+
 
   #undef COUT
   #define COUT(object) cout << #object "\n" << setw(6) << setprecision(5) << setfixed() << object << endl;

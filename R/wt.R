@@ -1,7 +1,6 @@
 # wt.R
 library(ggplot2)
-library(tidyr)
-library(dplyr)
+library(tidyverse)
 library(data.table)
 source("../R/readadmb.R")
 mytheme <- theme(panel.grid.major.x = element_blank(), panel.grid.minor.x = element_blank(), panel.grid.major.y = element_blank())# element_line(colour="grey60", linetype="dashed"))
