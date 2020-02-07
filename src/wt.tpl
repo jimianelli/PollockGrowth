@@ -18,6 +18,7 @@ DATA_SECTION
   !! nscale_parm = ndat-1;
 	// Number of years of observations in each data set
 	init_ivector nyrs_data(1,ndat);
+	!! cout <<"N yrs of data: "<<nyrs_data<<endl;
 	// Actual years of observations in each data set (ragged array)
   init_imatrix yrs_data(1,ndat,1,nyrs_data);
 	// First age and last, same for all datasets...
@@ -34,7 +35,7 @@ DATA_SECTION
  LOCAL_CALCS
    max_nyrs_data = max(nyrs_data);
   // Need to reset data-range for the years covered (for retrospective fitting)
-  retro = endyr-cur_yr-2;
+  retro = endyr-cur_yr-1;
   // NOTE This may not reduce sparse year data appropriately (assumed to be annual)
   for (int i=1;i<=ndat;i++) 
     nyrs_data(i) -= retro;
@@ -56,8 +57,8 @@ INITIALIZATION_SECTION
   log_sd_yr -1.2
 
 PARAMETER_SECTION
-  init_bounded_number L1(10,50,1);
-  init_bounded_number L2(30,110,2);
+  init_bounded_number L1(5,50,1);
+  init_bounded_number L2(10,110,2);
   init_number log_alpha(-1);
   init_number log_K(3);
   init_matrix d_scale(1,nscale_parm,age_st,age_end,phase_d_scale);
